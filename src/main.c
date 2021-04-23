@@ -12,9 +12,6 @@
 #include "stm32f1xx_hal.h"
 #include "stm32f1xx_hal_tim.h"
 
-UART_HandleTypeDef huart3;
-TIM_HandleTypeDef  htim4;
-
 typedef enum
 {
     FBUS_INIT             = 0x15,
@@ -23,12 +20,26 @@ typedef enum
 
 } fbus_command;
 
-static int  append_crc(uint8_t buffer[16]);
-static bool is_payload_size_valid(uint8_t payload_size);
+typedef enum
+{
+    STATUS_NONE = 0,
+    STATUS_ERROR,
+    STATUS_WAIT_FOR_ACK,
+
+} app_status;
+
+UART_HandleTypeDef huart3;
+TIM_HandleTypeDef  htim4;
+
+static uint8_t    rx_buffer[16] = { 0 };
+static app_status status        = STATUS_NONE;
+
+static void calculate_crc(uint8_t buffer[16], uint8_t* even_crc, uint8_t* odd_crc, bool append);
+static void error_handler(void);
+static bool is_message_valid(uint8_t buffer[16]);
 static int  send_command(fbus_command command, uint8_t payload_size, uint8_t* payload);
 static int  sync_fbus(void);
 static void system_init(void);
-static void error_handler(void);
 
 int main(void)
 {
@@ -59,9 +70,9 @@ int main(void)
      * Byte 1 - odd checksum byte
      * Byte 2 - even checksum byte
      * ---
-
+     *
      * 55 55 55 55 55 55                                       ->
-                                                        ** ~60ms pause
+     *                                                         ** ~60ms pause
      * [1E 00 10 15 00 08] [00 06 00 02 00 00 01 60] [0F 79]   ->
      *                                                         <- [1E 10 00 7F 00 02] [15 00] [0B 6D]
      *                                                         <- [1E 10 00 15 00 08] [06 27 00 65 05 05 01 (42)] [1C 08]
@@ -84,34 +95,95 @@ int main(void)
      * 07 <- 47
      */
 
-    /* Synchronise FBus */
+    /* Synchronise FBus
+     * 55 55 55 55 55 55 ->
+     */
     if (0 > sync_fbus())
     {
         error_handler();
     }
     HAL_Delay(60);
 
-    // Let's go.
+    /* [ Header          ] [ Payload               ] [ CRC ]
+     * [1E 00 10 15 00 08] [00 06 00 02 00 00 01 60] [0F 79] ->
+     */
     if (0 > send_command(FBUS_INIT, 8, payload))
     {
         error_handler();
     }
 
-    // tbd.
-
-    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
     while(1)
     {
-        HAL_Delay(1);
-    };
+        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+        switch (status)
+        {
+            case STATUS_ERROR:
+                HAL_Delay(100);
+                break;
+            case STATUS_NONE:
+            case STATUS_WAIT_FOR_ACK:
+            default:
+                HAL_Delay(500);
+                break;
+        }
+    }
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-    // tbd.
+    if (STATUS_WAIT_FOR_ACK == status)
+    {
+        if (true == is_message_valid(rx_buffer))
+        {
+            if (rx_buffer[0] == 0x1E && rx_buffer[3] == FBUS_ACK)
+            {
+                status = STATUS_NONE;
+            }
+            else
+            {
+                status = STATUS_ERROR;
+            }
+        }
+        else
+        {
+            status = STATUS_ERROR;
+        }
+    }
 }
 
-static int append_crc(uint8_t buffer[16])
+static void calculate_crc(uint8_t buffer[16], uint8_t* even_crc, uint8_t* odd_crc, bool append)
+{
+    uint8_t payload_size = buffer[5];
+
+    *even_crc = 0;
+    *odd_crc  = 0;
+
+    for (int i = 0; i < 6 + payload_size; i += 1)
+    {
+        if (i % 2 == 0)
+        {
+            *even_crc ^= buffer[i];
+        }
+        else
+        {
+            *odd_crc ^= buffer[i];
+        }
+    }
+
+    if (true == append)
+    {
+        buffer[6 + payload_size] = *even_crc;
+        buffer[7 + payload_size] = *odd_crc;
+    }
+}
+
+static void error_handler(void)
+{
+    __disable_irq();
+    while (1) {}
+}
+
+static bool is_message_valid(uint8_t buffer[16])
 {
     uint8_t payload_size = buffer[5];
     uint8_t even_crc     = 0;
@@ -119,28 +191,25 @@ static int append_crc(uint8_t buffer[16])
 
     if (buffer[0] != 0x1E)
     {
-        return -3;
-    }
-    if (false == is_payload_size_valid(payload_size))
-    {
-        return -2;
+        return false;
     }
 
-    for (int i = 0; i < 6 + payload_size; i += 1)
+    if (payload_size % 2 != 0 || payload_size > 8)
     {
-        if (i % 2 == 0)
-        {
-            even_crc ^= buffer[i];
-        }
-        else
-        {
-            odd_crc ^= buffer[i];
-        }
+        return false;
     }
-    buffer[6 + payload_size] = even_crc;
-    buffer[7 + payload_size] = odd_crc;
 
-    return 0;
+    calculate_crc(buffer, &even_crc, &odd_crc, false);
+    if (buffer[6 + payload_size] != even_crc)
+    {
+        return false;
+    }
+    if (buffer[7 + payload_size] != odd_crc)
+    {
+        return false;
+    }
+
+    return true;
 }
 
 static bool is_payload_size_valid(uint8_t payload_size)
@@ -157,26 +226,31 @@ static bool is_payload_size_valid(uint8_t payload_size)
 
 static int send_command(fbus_command command, uint8_t payload_size, uint8_t* payload)
 {
-    int     status        = 0;
+    uint8_t even_crc      = 0;
+    uint8_t odd_crc       = 0;
     uint8_t tx_buffer[16] = { 0x1E, 0x00, 0x10, command, 0x00 };
 
-    if (false == is_payload_size_valid(payload_size))
+    tx_buffer[5] = payload_size;
+    memcpy(&tx_buffer[6], &payload[0], payload_size);
+    calculate_crc(tx_buffer, &even_crc, &odd_crc, true);
+
+    if (false == is_message_valid(tx_buffer))
     {
         return -2;
     }
 
-    tx_buffer[5] = payload_size;
-    memcpy(&tx_buffer[6], &payload[0], payload_size);
-
-    status = append_crc(tx_buffer);
-    if (0 > status)
-    {
-        return status;
-    }
-
-    if (HAL_OK != HAL_UART_Transmit(&huart3, tx_buffer, 8 + payload_size, 100))
+    if (HAL_OK != HAL_UART_Transmit_IT(&huart3, tx_buffer, 8 + payload_size))
     {
         return -1;
+    }
+
+    if (command != FBUS_ACK)
+    {
+        status = STATUS_WAIT_FOR_ACK;
+        if (HAL_OK != HAL_UART_Receive_IT(&huart3, rx_buffer, 10))
+        {
+            return -3;
+        }
     }
 
     return 0;
@@ -186,7 +260,7 @@ static int sync_fbus(void)
 {
     uint8_t tx_buffer[6] = { 0x55, 0x55, 0x55, 0x55, 0x55, 0x55 };
 
-    if (HAL_OK != HAL_UART_Transmit(&huart3, tx_buffer, 6, 100))
+    if (HAL_OK != HAL_UART_Transmit_IT(&huart3, tx_buffer, 6))
     {
         return -1;
     }
@@ -261,12 +335,6 @@ static void system_init(void)
     {
         error_handler();
     }
-}
-
-static void error_handler(void)
-{
-    __disable_irq();
-    while (1) {}
 }
 
 void HAL_MspInit(void)
