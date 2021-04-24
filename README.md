@@ -48,9 +48,79 @@ The project is based on a STM32F103C8 microcontroller board a.k.a. a
 The project is currently in a prototype phase. The current development
 state is neither complete nor functional.
 
-## Protocol specification
+## FBus
 
-Tbd.
+The FBus is a bi-directional full-duplex serial type bus running at
+115,200 bit/s, 8 data bits, no parity, one stop bit (8N1).
+
+### Message structure
+
+```text
+  [      Header     ] [Payload] [xx xx]
+  [1E xx xx xx xx xx] [Payload] [ CRC ]
+
+  [ Header ]
+  Byte 0 - F-Bus Frame ID
+    E1 = Message via F-Bus cable
+  Byte 1 - Destination address
+  Byte 2 - Source address
+    00 = Phone
+    10 = Twister
+  Byte 3 - Message type / command
+  Byte 4 - Payload size in bytes (MSB)
+  Byte 5 - Payload size in bytes (LSB)
+
+  [ Payload ]
+  Byte 6 ... - Payload
+
+  [ CRC ]
+  Byte 1 - even checksum byte (all even bytes XORed together)
+  Byte 2 - odd checksum byte  (all odd bytes XORed together)
+```
+
+### Formatting the user area
+
+Here is a brief summary of the messages exchanged between the flashing
+equipment and the Symbian phone when the user area is formatted.
+
+[![Logic analyser](.media/logic-analyser-tn.png)](.media/logic-analyser.jpg?raw=true "Logic analyser")
+
+This description is based on pure observation with the help of a logic
+analyser.
+
+```text
+SEND 55 55 55 55 55 55 (synchronise FBus)
+
+ca. 60ms pause
+
+SEND [1E 00 10 15 00 08] [00 06 00 02 00 00 01 60]   [0F 79] (handshake)
+RECV [1E 10 00 7F 00 02] [15 00]                     [0B 6D] (ack handshake)
+RECV [1E 10 00 15 00 08] [06 27 00 65 05 05 01 (42)] [1C 08] (handshake)
+SEND [1E 00 10 7F 00 02] [15 (02)]                   [1B 7F] (ack handshake)
+
+ca. 16ms pause
+
+SEND [1E 00 10 58 00 08] [00 0B 00 07 06 00 01 41]   [09 1D] (format user area)
+RECV [1E 10 00 7F 00 02] [58 01]                     [46 6C] (ack format user area)
+
+ca. 40-50s pause
+
+RECV 55 55 (synchronise FBus)
+
+RECV [1E 10 00 58 00 08] [0B 38 00 08 00 00 01 (43)] [14 33] (done)
+SEND [1E 00 10 7F 00 02] [58 (03)]                   [56 7E] (ack done)
+```
+
+Surely you have noticed the bracketed numbers.  These are variable.  The
+Symbian phone sends an initial value between 40 and 47.  The flashing
+equipment responds with this number minus 40.
+
+Moreover, this number is apparently a kind of frame counter.  For
+example, if the phone sends an initial 42, the next of these messages
+sent from the phone to the flasher will contain the number 43. After 47,
+there is an overflow back to 40.
+
+I suspect that this is some kind of frame counter.
 
 ## Installation
 
