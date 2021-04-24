@@ -83,10 +83,10 @@ The FBus is a bi-directional full-duplex serial type bus running at
 Here is a brief summary of the messages exchanged between the flashing
 equipment and the Symbian phone when the user area is formatted.
 
-[![Logic analyser](.media/logic-analyser-tn.png)](.media/logic-analyser.jpg?raw=true "Logic analyser")
-
 This description is based on pure observation with the help of a logic
 analyser.
+
+[![Logic analyser](.media/logic-analyser-tn.png)](.media/logic-analyser.jpg?raw=true "Logic analyser")
 
 ```text
 SEND 55 55 55 55 55 55 (synchronise FBus)
