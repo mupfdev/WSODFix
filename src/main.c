@@ -22,16 +22,16 @@ typedef enum
 
 typedef enum
 {
-    SEND_SYNC = 0,        /* Send [55 55 55 55 55 55]                                   */
-    SEND_HANDSHAKE,       /* Send [1E 00 10 15 00 08] [00 06 00 02 00 00 01 60] [0F 79] */
-    RECV_HANDSHAKE_ACK,   /* Recv [1E 10 00 7F 00 02] [15 00]                   [0B 6D] */
-    RECV_HANDSHAKE,       /* Recv [1E 10 00 15 00 08] [06 27 00 65 05 05 01 xx] [xx xx] */
-    SEND_HANDSHAKE_ACK,   /* Send [1E 00 10 7F 00 02] [15 xx]                   [xx xx] */
-    SEND_FORMAT_START,    /* Send [1E 00 10 58 00 08] [00 0B 00 07 06 00 01 41] [09 1D] */
-    RECV_FORMAT_ACK,      /* Recv [1E 10 00 7F 00 02] [58 01]                   [46 6C] */
-    RECV_SYNC,            /* Recv [55 55]                                               */
-    RECV_FORMAT_DONE,     /* Recv [1E 10 00 58 00 08] [0B 38 00 08 00 00 01 xx] [xx xx] */
-    SEND_FORMAT_DONE_ACK, /* Send [1E 00 10 7F 00 02] [58 xx]                   [xx xx] */
+    SEND_SYNC = 0,      /* Send [55 55 55 55 55 55]                                   */
+    SEND_HANDSHAKE,     /* Send [1E 00 10 15 00 08] [00 06 00 02 00 00 01 60] [0F 79] */
+    RECV_HANDSHAKE_ACK, /* Recv [1E 10 00 7F 00 02] [15 00]                   [0B 6D] */
+    RECV_HANDSHAKE,     /* Recv [1E 10 00 15 00 08] [06 27 00 65 05 05 01 xx] [xx xx] */
+    SEND_HANDSHAKE_ACK, /* Send [1E 00 10 7F 00 02] [15 xx]                   [xx xx] */
+    SEND_FORMAT,        /* Send [1E 00 10 58 00 08] [00 0B 00 07 06 00 01 41] [09 1D] */
+    RECV_FORMAT_ACK,    /* Recv [1E 10 00 7F 00 02] [58 01]                   [46 6C] */
+    RECV_SYNC,          /* Recv [55 55]                                               */
+    RECV_FORMAT,        /* Recv [1E 10 00 58 00 08] [0B 38 00 08 00 00 01 xx] [xx xx] */
+    SEND_FORMAT_ACK,    /* Send [1E 00 10 7F 00 02] [58 xx]                   [xx xx] */
     HALT_ERROR
 
 } app_progress;
@@ -95,7 +95,7 @@ int main(void)
             case SEND_HANDSHAKE_ACK:
                 /* tbd. */
                 break;
-            case SEND_FORMAT_START:
+            case SEND_FORMAT:
                 /* tbd. */
                 break;
             case RECV_FORMAT_ACK:
@@ -104,10 +104,10 @@ int main(void)
             case RECV_SYNC:
                 /* tbd. */
                 break;
-            case RECV_FORMAT_DONE:
+            case RECV_FORMAT:
                 /* tbd. */
                 break;
-            case SEND_FORMAT_DONE_ACK:
+            case SEND_FORMAT_ACK:
                 /* tbd. */
                 break;
             case HALT_ERROR:
@@ -135,20 +135,22 @@ int main(void)
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
+    if (RECV_SYNC != progress)
+    {
+        if (false == is_message_valid(rx_buffer))
+        {
+            progress = HALT_ERROR;
+            return;
+        }
+    }
+
     if (RECV_HANDSHAKE_ACK == progress)
     {
-        if (true == is_message_valid(rx_buffer))
+        if (rx_buffer[0] == 0x1E &&
+            rx_buffer[3] == FBUS_ACK &&
+            rx_buffer[6] == FBUS_HANDSHAKE)
         {
-            if (rx_buffer[0] == 0x1E &&
-                rx_buffer[3] == FBUS_ACK &&
-                rx_buffer[6] == FBUS_HANDSHAKE)
-            {
-                progress = RECV_HANDSHAKE;
-            }
-            else
-            {
-                progress = HALT_ERROR;
-            }
+            progress = RECV_HANDSHAKE;
         }
         else
         {
