@@ -120,8 +120,6 @@ example, if the phone sends an initial 42, the next of these messages
 sent from the phone to the flasher will contain the number 43. After 47,
 there is an overflow back to 40.
 
-I suspect that this is some kind of frame counter.
-
 ## Installation
 
 1. Install [PlatformIO Core](http://docs.platformio.org/page/core.html)
