@@ -14,7 +14,7 @@
 
 typedef enum
 {
-    FBUS_INIT             = 0x15,
+    FBUS_HANDSHAKE        = 0x15,
     FBUS_ACK              = 0x7F,
     FBUS_FORMAT_USER_AREA = 0x58
 
@@ -22,17 +22,35 @@ typedef enum
 
 typedef enum
 {
-    STATUS_NONE = 0,
-    STATUS_ERROR,
-    STATUS_WAIT_FOR_ACK,
+    SEND_SYNC = 0,        /* Send [55 55 55 55 55 55]                                   */
+    SEND_HANDSHAKE,       /* Send [1E 00 10 15 00 08] [00 06 00 02 00 00 01 60] [0F 79] */
+    RECV_HANDSHAKE_ACK,   /* Recv [1E 10 00 7F 00 02] [15 00]                   [0B 6D] */
+    RECV_HANDSHAKE,       /* Recv [1E 10 00 15 00 08] [06 27 00 65 05 05 01 xx] [xx xx] */
+    SEND_HANDSHAKE_ACK,   /* Send [1E 00 10 7F 00 02] [15 xx]                   [xx xx] */
+    SEND_FORMAT_START,    /* Send [1E 00 10 58 00 08] [00 0B 00 07 06 00 01 41] [09 1D] */
+    RECV_FORMAT_ACK,      /* Recv [1E 10 00 7F 00 02] [58 01]                   [46 6C] */
+    RECV_SYNC,            /* Recv [55 55]                                               */
+    RECV_FORMAT_DONE,     /* Recv [1E 10 00 58 00 08] [0B 38 00 08 00 00 01 xx] [xx xx] */
+    SEND_FORMAT_DONE_ACK, /* Send [1E 00 10 7F 00 02] [58 xx]                   [xx xx] */
+    HALT_ERROR
 
-} app_status;
+} app_progress;
+
+typedef enum
+{
+    LED_OK = 0,
+    LED_ERROR,
+    LED_WAIT_FOR_ACK,
+    LED_FORMATTING
+
+} led_pattern;
 
 UART_HandleTypeDef huart3;
 TIM_HandleTypeDef  htim4;
 
-static uint8_t    rx_buffer[16] = { 0 };
-static app_status status        = STATUS_NONE;
+static uint8_t      rx_buffer[16] = { 0 };
+static app_progress progress      = SEND_SYNC;
+static led_pattern  led_gn        = LED_OK;
 
 static void calculate_crc(uint8_t buffer[16], uint8_t* even_crc, uint8_t* odd_crc, bool append);
 static void error_handler(void);
@@ -43,85 +61,71 @@ static void system_init(void);
 
 int main(void)
 {
-    uint8_t payload[8] = { 0x00, 0x06, 0x00, 0x02, 0x00, 0x00, 0x01, 0x60 };
     system_init();
-
-    /* Notes.
-     *
-     * 55 55 55 ... = Bus synchronisation
-     *
-     * [      Header     ] [Payload] [xx xx]
-     * [1E xx xx xx xx xx] [Payload] [ CRC ]
-     *
-     * --- Header ---
-     * Byte 0 - F-Bus Frame ID
-     *     E1 = Message via F-Bus cable
-     * Byte 1 - Destination address
-     * Byte 2 - Source address
-     *     00 = Phone
-     *     10 = Twister
-     * Byte 3 - Message type / command
-     * Byte 4 - Payload size in bytes (MSB)
-     * Byte 5 - Payload size in bytes (LSB)
-     * --- Payload ---
-     * Byte 6 ... - Payload
-     * --- CRC ---
-     * Last two bytes
-     * Byte 1 - odd checksum byte
-     * Byte 2 - even checksum byte
-     * ---
-     *
-     * 55 55 55 55 55 55                                       ->
-     *                                                         ** ~60ms pause
-     * [1E 00 10 15 00 08] [00 06 00 02 00 00 01 60] [0F 79]   ->
-     *                                                         <- [1E 10 00 7F 00 02] [15 00] [0B 6D]
-     *                                                         <- [1E 10 00 15 00 08] [06 27 00 65 05 05 01 (42)] [1C 08]
-     * [1E 00 10 7F 00 02] [15 (02)] [1B 7F]                   ->
-     *                                                         ** ~16ms pause
-     * [1E 00 10 58 00 08] [00 0B 00 07 06 00 01 (41)] [09 1D] ->
-     *                                                         <- [1E 10 00 7F 00 02] [58 01] [46 6C]
-     *                                                         ** ~40-50s pause
-     *                                                         <- 55 55
-     *                                                         <- [1E 10 00 58 00 08] [0B 38 00 08 00 00 01 (43)] [14 33]
-     * [1E 00 10 7F 00 02] [58 (03)] [56 7E]                   ->
-     *                                                         ** Done
-     * 00 <- 40
-     * 01 <- 41
-     * 02 <- 42
-     * 03 <- 43
-     * 04 <- 44
-     * 05 <- 45
-     * 06 <- 46
-     * 07 <- 47
-     */
-
-    /* Synchronise FBus
-     * 55 55 55 55 55 55 ->
-     */
-    if (0 > sync_fbus())
-    {
-        error_handler();
-    }
-    HAL_Delay(60);
-
-    /* [ Header          ] [ Payload               ] [ CRC ]
-     * [1E 00 10 15 00 08] [00 06 00 02 00 00 01 60] [0F 79] ->
-     */
-    if (0 > send_command(FBUS_INIT, 8, payload))
-    {
-        error_handler();
-    }
 
     while(1)
     {
-        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-        switch (status)
+        switch (progress)
         {
-            case STATUS_ERROR:
+            case SEND_SYNC:
+                if (0 > sync_fbus())
+                {
+                    error_handler();
+                }
+                HAL_Delay(60);
+                progress = SEND_HANDSHAKE;
+                continue;
+            case SEND_HANDSHAKE:
+            {
+                uint8_t payload[8] = { 0x00, 0x06, 0x00, 0x02, 0x00, 0x00, 0x01, 0x60 };
+                if (0 > send_command(FBUS_HANDSHAKE, 8, payload))
+                {
+                    error_handler();
+                }
+                progress = RECV_HANDSHAKE_ACK;
+                continue;
+            }
+            case RECV_HANDSHAKE_ACK:
+                led_gn = LED_WAIT_FOR_ACK;
+                HAL_UART_Receive_IT(&huart3, rx_buffer, 10);
+                break;
+            case RECV_HANDSHAKE:
+                /* tbd. */
+                break;
+            case SEND_HANDSHAKE_ACK:
+                /* tbd. */
+                break;
+            case SEND_FORMAT_START:
+                /* tbd. */
+                break;
+            case RECV_FORMAT_ACK:
+                /* tbd. */
+                break;
+            case RECV_SYNC:
+                /* tbd. */
+                break;
+            case RECV_FORMAT_DONE:
+                /* tbd. */
+                break;
+            case SEND_FORMAT_DONE_ACK:
+                /* tbd. */
+                break;
+            case HALT_ERROR:
+                led_gn = LED_ERROR;
+                break;
+        }
+
+        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+        switch (led_gn)
+        {
+            case LED_ERROR:
                 HAL_Delay(100);
                 break;
-            case STATUS_NONE:
-            case STATUS_WAIT_FOR_ACK:
+            case LED_FORMATTING:
+                HAL_Delay(60);
+                break;
+            case LED_OK:
+            case LED_WAIT_FOR_ACK:
             default:
                 HAL_Delay(500);
                 break;
@@ -131,22 +135,24 @@ int main(void)
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-    if (STATUS_WAIT_FOR_ACK == status)
+    if (RECV_HANDSHAKE_ACK == progress)
     {
         if (true == is_message_valid(rx_buffer))
         {
-            if (rx_buffer[0] == 0x1E && rx_buffer[3] == FBUS_ACK)
+            if (rx_buffer[0] == 0x1E &&
+                rx_buffer[3] == FBUS_ACK &&
+                rx_buffer[6] == FBUS_HANDSHAKE)
             {
-                status = STATUS_NONE;
+                progress = RECV_HANDSHAKE;
             }
             else
             {
-                status = STATUS_ERROR;
+                progress = HALT_ERROR;
             }
         }
         else
         {
-            status = STATUS_ERROR;
+            progress = HALT_ERROR;
         }
     }
 }
@@ -212,18 +218,6 @@ static bool is_message_valid(uint8_t buffer[16])
     return true;
 }
 
-static bool is_payload_size_valid(uint8_t payload_size)
-{
-    if (payload_size > 8 || payload_size == 0 || payload_size % 2 != 0)
-    {
-        return false;
-    }
-    else
-    {
-        return true;
-    }
-}
-
 static int send_command(fbus_command command, uint8_t payload_size, uint8_t* payload)
 {
     uint8_t even_crc      = 0;
@@ -239,18 +233,9 @@ static int send_command(fbus_command command, uint8_t payload_size, uint8_t* pay
         return -2;
     }
 
-    if (HAL_OK != HAL_UART_Transmit_IT(&huart3, tx_buffer, 8 + payload_size))
+    if (HAL_OK != HAL_UART_Transmit(&huart3, tx_buffer, 8 + payload_size, 100))
     {
         return -1;
-    }
-
-    if (command != FBUS_ACK)
-    {
-        status = STATUS_WAIT_FOR_ACK;
-        if (HAL_OK != HAL_UART_Receive_IT(&huart3, rx_buffer, 10))
-        {
-            return -3;
-        }
     }
 
     return 0;
@@ -260,7 +245,7 @@ static int sync_fbus(void)
 {
     uint8_t tx_buffer[6] = { 0x55, 0x55, 0x55, 0x55, 0x55, 0x55 };
 
-    if (HAL_OK != HAL_UART_Transmit_IT(&huart3, tx_buffer, 6))
+    if (HAL_OK != HAL_UART_Transmit(&huart3, tx_buffer, 6, 100))
     {
         return -1;
     }
