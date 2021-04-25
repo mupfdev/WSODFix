@@ -45,8 +45,12 @@ The project is based on a STM32F103C8 microcontroller board a.k.a. a
 
 ## Status
 
-The project is currently in a prototype phase. The current development
-state is neither complete nor functional.
+The firmware is virtually complete and works as expected, at least in
+the simulation.  A test on real hardware is still pending.
+
+## Hardware
+
+tbd.
 
 ## FBus
 
@@ -116,9 +120,9 @@ Symbian phone sends an initial value between 40 and 47.  The flashing
 equipment responds with this number minus 40.
 
 Moreover, this number is apparently a kind of frame counter.  For
-example, if the phone sends an initial 42, the next of these messages
-sent from the phone to the flasher will contain the number 43. After 47,
-there is an overflow back to 40.
+example, if the phone sends an initial 42, the next message sent from
+the phone to the flasher will contain the number 43. After 47, there is
+an overflow back to 40.
 
 ## Installation
 
