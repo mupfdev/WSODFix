@@ -14,24 +14,25 @@
 
 typedef enum
 {
-    FBUS_HANDSHAKE        = 0x15,
-    FBUS_ACK              = 0x7F,
-    FBUS_FORMAT_USER_AREA = 0x58
+    FBUS_HANDSHAKE = 0x15,
+    FBUS_ACK       = 0x7F,
+    FBUS_FORMAT    = 0x58
 
 } fbus_command;
 
 typedef enum
 {
-    SEND_SYNC = 0,      /* Send [55 55 55 55 55 55]                                   */
-    SEND_HANDSHAKE,     /* Send [1E 00 10 15 00 08] [00 06 00 02 00 00 01 60] [0F 79] */
-    RECV_HANDSHAKE_ACK, /* Recv [1E 10 00 7F 00 02] [15 00]                   [0B 6D] */
-    RECV_HANDSHAKE,     /* Recv [1E 10 00 15 00 08] [06 27 00 65 05 05 01 xx] [xx xx] */
-    SEND_HANDSHAKE_ACK, /* Send [1E 00 10 7F 00 02] [15 xx]                   [xx xx] */
-    SEND_FORMAT,        /* Send [1E 00 10 58 00 08] [00 0B 00 07 06 00 01 41] [09 1D] */
-    RECV_FORMAT_ACK,    /* Recv [1E 10 00 7F 00 02] [58 01]                   [46 6C] */
-    RECV_SYNC,          /* Recv [55 55]                                               */
-    RECV_FORMAT,        /* Recv [1E 10 00 58 00 08] [0B 38 00 08 00 00 01 xx] [xx xx] */
-    SEND_FORMAT_ACK,    /* Send [1E 00 10 7F 00 02] [58 xx]                   [xx xx] */
+    SEND_SYNC = 0,           /* Send [55 55 55 55 55 55]                                   */
+    SEND_HANDSHAKE,          /* Send [1E 00 10 15 00 08] [00 06 00 02 00 00 01 60] [0F 79] */
+    RECV_ACK_RECV_HANDSHAKE, /* Recv [1E 10 00 7F 00 02] [15 00]                   [0B 6D] */
+                             /* Recv [1E 10 00 15 00 08] [06 27 00 65 05 05 01 xx] [1C xx] */
+    SEND_HANDSHAKE_ACK,      /* Send [1E 00 10 7F 00 02] [15 xx]                   [1B xx] */
+    SEND_FORMAT,             /* Send [1E 00 10 58 00 08] [00 0B 00 07 06 00 01 41] [09 1D] */
+    RECV_FORMAT_ACK,         /* Recv [1E 10 00 7F 00 02] [58 01]                   [46 6C] */
+    RECV_SYNC_RECV_FORMAT,   /* Recv [55 55]                                               */
+                             /* Recv [1E 10 00 58 00 08] [0B 38 00 08 00 00 01 xx] [14 xx] */
+    SEND_FORMAT_ACK,         /* Send [1E 00 10 7F 00 02] [58 xx]                   [56 xx] */
+    ALL_DONE,
     HALT_ERROR
 
 } app_progress;
@@ -40,21 +41,21 @@ typedef enum
 {
     LED_OK = 0,
     LED_ERROR,
-    LED_WAIT_FOR_ACK,
-    LED_FORMATTING
+    LED_FORMATTING,
 
 } led_pattern;
 
 UART_HandleTypeDef huart3;
 TIM_HandleTypeDef  htim4;
 
-static uint8_t      rx_buffer[16] = { 0 };
+static uint8_t      rx_buffer[26] = { 0 };
+static int          frame_counter = 0;
 static app_progress progress      = SEND_SYNC;
-static led_pattern  led_gn        = LED_OK;
+static led_pattern  status_led    = LED_OK;
 
-static void calculate_crc(uint8_t buffer[16], uint8_t* even_crc, uint8_t* odd_crc, bool append);
+static void calculate_crc(uint8_t* buffer, uint8_t* even_crc, uint8_t* odd_crc, bool append);
 static void error_handler(void);
-static bool is_message_valid(uint8_t buffer[16]);
+static bool is_message_valid(uint8_t* buffer);
 static int  send_command(fbus_command command, uint8_t payload_size, uint8_t* payload);
 static int  sync_fbus(void);
 static void system_init(void);
@@ -67,6 +68,9 @@ int main(void)
     {
         switch (progress)
         {
+            case HALT_ERROR:
+                status_led = LED_ERROR;
+                break;
             case SEND_SYNC:
                 if (0 > sync_fbus())
                 {
@@ -82,50 +86,71 @@ int main(void)
                 {
                     error_handler();
                 }
-                progress = RECV_HANDSHAKE_ACK;
+                progress = RECV_ACK_RECV_HANDSHAKE;
                 continue;
             }
-            case RECV_HANDSHAKE_ACK:
-                led_gn = LED_WAIT_FOR_ACK;
-                HAL_UART_Receive_IT(&huart3, rx_buffer, 10);
-                break;
-            case RECV_HANDSHAKE:
-                /* tbd. */
+            case RECV_ACK_RECV_HANDSHAKE:
+                HAL_UART_Receive_IT(&huart3, &rx_buffer[0], 26);
                 break;
             case SEND_HANDSHAKE_ACK:
-                /* tbd. */
-                break;
+            {
+                uint8_t payload[2] = { FBUS_HANDSHAKE, frame_counter - 0x40 };
+                if (0 > send_command(FBUS_ACK, 2, payload))
+                {
+                    error_handler();
+                }
+                progress = SEND_FORMAT;
+                continue;
+            }
             case SEND_FORMAT:
-                /* tbd. */
-                break;
+            {
+                uint8_t payload[8] = { 0x00, 0x0B, 0x00, 0x07, 0x06, 0x00, 0x01, 0x41 };
+                HAL_Delay(16);
+                if (0 > send_command(FBUS_FORMAT, 8, payload))
+                {
+                    error_handler();
+                }
+                progress = RECV_FORMAT_ACK;
+                continue;
+            }
             case RECV_FORMAT_ACK:
-                /* tbd. */
+                HAL_UART_Receive_IT(&huart3, &rx_buffer[0], 10);
                 break;
-            case RECV_SYNC:
-                /* tbd. */
-                break;
-            case RECV_FORMAT:
-                /* tbd. */
+            case RECV_SYNC_RECV_FORMAT:
+                HAL_UART_Receive_IT(&huart3, &rx_buffer[0], 18);
                 break;
             case SEND_FORMAT_ACK:
-                /* tbd. */
-                break;
-            case HALT_ERROR:
-                led_gn = LED_ERROR;
+            {
+                uint8_t payload[2] = { FBUS_FORMAT, frame_counter - 0x40 };
+                if (0 > send_command(FBUS_ACK, 2, payload))
+                {
+                    error_handler();
+                }
+                progress = ALL_DONE;
+                continue;
+            }
+            case ALL_DONE:
+            default:
                 break;
         }
 
-        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-        switch (led_gn)
+        if (ALL_DONE == progress)
+        {
+            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+        }
+        else
+        {
+            HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+        }
+        switch (status_led)
         {
             case LED_ERROR:
                 HAL_Delay(100);
                 break;
             case LED_FORMATTING:
-                HAL_Delay(60);
+                HAL_Delay(30);
                 break;
             case LED_OK:
-            case LED_WAIT_FOR_ACK:
             default:
                 HAL_Delay(500);
                 break;
@@ -135,26 +160,92 @@ int main(void)
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-    if (RECV_SYNC != progress)
+    if (RECV_ACK_RECV_HANDSHAKE == progress)
     {
-        if (false == is_message_valid(rx_buffer))
+        uint8_t* msg_ack       = &rx_buffer[0];
+        uint8_t* msg_handshake = &rx_buffer[10];
+
+        if (false == is_message_valid(msg_ack) ||
+            false == is_message_valid(msg_handshake))
         {
             progress = HALT_ERROR;
             return;
         }
-    }
 
-    if (RECV_HANDSHAKE_ACK == progress)
-    {
-        if (rx_buffer[0] == 0x1E &&
-            rx_buffer[3] == FBUS_ACK &&
-            rx_buffer[6] == FBUS_HANDSHAKE)
+        if (msg_ack[0]        == 0x1E &&
+            msg_ack[3]        == FBUS_ACK &&
+            msg_ack[6]        == FBUS_HANDSHAKE &&
+            msg_handshake[0]  == 0x1E &&
+            msg_handshake[3]  == FBUS_HANDSHAKE &&
+            msg_handshake[6]  == 0x06 &&
+            msg_handshake[7]  == 0x27 &&
+            msg_handshake[8]  == 0x00 &&
+            msg_handshake[9]  == 0x65 &&
+            msg_handshake[10] == 0x05 &&
+            msg_handshake[11] == 0x05 &&
+            msg_handshake[12] == 0x01)
         {
-            progress = RECV_HANDSHAKE;
+            frame_counter = msg_handshake[13];
+            progress      = SEND_HANDSHAKE_ACK;
         }
         else
         {
             progress = HALT_ERROR;
+        }
+    }
+    else if (RECV_FORMAT_ACK == progress)
+    {
+        uint8_t* msg_ack = &rx_buffer[0];
+
+        if (false == is_message_valid(msg_ack))
+        {
+            progress = HALT_ERROR;
+            return;
+        }
+
+        if (msg_ack[0]        == 0x1E &&
+            msg_ack[3]        == FBUS_ACK &&
+            msg_ack[6]        == FBUS_FORMAT)
+        {
+            progress   = RECV_SYNC_RECV_FORMAT;
+            status_led = LED_FORMATTING;
+        }
+        else
+        {
+            progress = HALT_ERROR;
+        }
+    }
+    else if (RECV_SYNC_RECV_FORMAT == progress)
+    {
+        uint8_t* msg_sync   = &rx_buffer[0];
+        uint8_t* msg_format = &rx_buffer[2];
+
+        if (false == is_message_valid(msg_format))
+        {
+            progress = HALT_ERROR;
+            return;
+        }
+
+        if (msg_sync[0]    == 0x55 &&
+            msg_sync[1]    == 0x55 &&
+            msg_format[0]  == 0x1E &&
+            msg_format[3]  == FBUS_FORMAT &&
+            msg_format[6]  == 0x0B &&
+            msg_format[7]  == 0x38 &&
+            msg_format[8]  == 0x00 &&
+            msg_format[9]  == 0x08 &&
+            msg_format[10] == 0x00 &&
+            msg_format[11] == 0x00 &&
+            msg_format[12] == 0x01)
+        {
+            frame_counter = msg_format[13];
+            progress      = SEND_FORMAT_ACK;
+            return;
+        }
+        else
+        {
+            progress = HALT_ERROR;
+            return;
         }
     }
 }
@@ -187,6 +278,7 @@ static void calculate_crc(uint8_t buffer[16], uint8_t* even_crc, uint8_t* odd_cr
 
 static void error_handler(void)
 {
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
     __disable_irq();
     while (1) {}
 }
@@ -299,7 +391,7 @@ static void system_init(void)
     __HAL_RCC_GPIOB_CLK_ENABLE();
 
     /* Configure GPIO pin Output Level */
-    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
 
     /* Configure GPIO pin : PC13 */
     GPIO_InitStruct.Pin   = GPIO_PIN_13;
@@ -451,10 +543,6 @@ void HAL_ResumeTick(void)
 }
 
 /* Cortex-M3 Processor Interruption and Exception Handlers */
-void TIM4_IRQHandler(void)
-{
-    HAL_TIM_IRQHandler(&htim4);
-}
 
 /*
  * STM32F1xx Peripheral Interrupt Handlers
@@ -462,6 +550,11 @@ void TIM4_IRQHandler(void)
  * For the available peripheral interrupt handler names,
  * please refer to the startup file (startup_stm32f1xx.s).
  */
+void TIM4_IRQHandler(void)
+{
+    HAL_TIM_IRQHandler(&htim4);
+}
+
 void USART3_IRQHandler(void)
 {
     HAL_UART_IRQHandler(&huart3);
