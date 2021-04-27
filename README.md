@@ -94,6 +94,7 @@ RJ45                        3V3             3V0
 WSODFix has been tested with the following phones so far:
 
 - Nokia N-Gage (NEM-4)
+- Nokia N-Gage QD (RH-29)
 
 ## FBus
 
