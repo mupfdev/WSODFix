@@ -1,7 +1,7 @@
 // Spdx-License-Identifier: MIT
 /**
  * @file    main.c
- * @brief   WSODFix WSOD fixer for the Nokia N-Gage
+ * @brief   WSODFix WSOD fixer for Symbian phones by Nokia
  * @details Fixes the WSOD problem by formatting the user area via FBus
  */
 
@@ -46,6 +46,7 @@ typedef enum
 } led_pattern;
 
 UART_HandleTypeDef huart3;
+TIM_HandleTypeDef  htim1;
 TIM_HandleTypeDef  htim4;
 
 static uint8_t      rx_buffer[26] = { 0 };
@@ -62,7 +63,23 @@ static void system_init(void);
 
 int main(void)
 {
+    uint32_t toggle_cnt = 0;
+    uint32_t toggle_ms  = 500;
+
     system_init();
+
+    /* Enter service mode. */
+    HAL_Delay(2);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
+    HAL_Delay(7700);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
+    HAL_Delay(987);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
+    HAL_Delay(849);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
+    HAL_Delay(592);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
+    HAL_Delay(4000);
 
     while(1)
     {
@@ -130,32 +147,41 @@ int main(void)
                 continue;
             }
             case ALL_DONE:
+                goto all_done;
             default:
                 break;
         }
 
-        if (ALL_DONE == progress)
-        {
-            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
-        }
-        else
-        {
-            HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-        }
         switch (status_led)
         {
             case LED_ERROR:
-                HAL_Delay(100);
+                toggle_ms = 100;
                 break;
             case LED_FORMATTING:
-                HAL_Delay(30);
+                toggle_ms = 30;
                 break;
             case LED_OK:
             default:
-                HAL_Delay(500);
+                toggle_ms = 500;
                 break;
         }
+
+        if (__HAL_TIM_GET_COUNTER(&htim1) >= 1000)
+        {
+            toggle_cnt += 1;
+            __HAL_TIM_SET_COUNTER(&htim1, 0);
+        }
+
+        if (toggle_cnt >= toggle_ms)
+        {
+            toggle_cnt = 0;
+            HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+        }
     }
+
+all_done:
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+    while (1) {}
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
@@ -187,10 +213,12 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
         {
             frame_counter = msg_handshake[13];
             progress      = SEND_HANDSHAKE_ACK;
+            return;
         }
         else
         {
             progress = HALT_ERROR;
+            return;
         }
     }
     else if (RECV_FORMAT_ACK == progress)
@@ -213,6 +241,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
         else
         {
             progress = HALT_ERROR;
+            return;
         }
     }
     else if (RECV_SYNC_RECV_FORMAT == progress)
@@ -348,9 +377,11 @@ static int sync_fbus(void)
 
 static void system_init(void)
 {
-    RCC_OscInitTypeDef RCC_OscInitStruct = { 0 };
-    RCC_ClkInitTypeDef RCC_ClkInitStruct = { 0 };
-    GPIO_InitTypeDef   GPIO_InitStruct   = { 0 };
+    RCC_OscInitTypeDef      RCC_OscInitStruct  = { 0 };
+    RCC_ClkInitTypeDef      RCC_ClkInitStruct  = { 0 };
+    GPIO_InitTypeDef        GPIO_InitStruct    = { 0 };
+    TIM_ClockConfigTypeDef  sClockSourceConfig = { 0 };
+    TIM_MasterConfigTypeDef sMasterConfig      = { 0 };
 
     /* Reset of all peripherals, Initialises the Flash interface and the
      * Systick.
@@ -392,6 +423,21 @@ static void system_init(void)
 
     /* Configure GPIO pin Output Level */
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
+
+    /* Configure GPIO pin : PC13 */
+    GPIO_InitStruct.Pin   = GPIO_PIN_13;
+    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull  = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    /* Configure GPIO pin : PB1 */
+    GPIO_InitStruct.Pin   = GPIO_PIN_1;
+    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull  = GPIO_PULLDOWN;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
     /* Configure GPIO pin : PC13 */
     GPIO_InitStruct.Pin   = GPIO_PIN_13;
@@ -414,6 +460,36 @@ static void system_init(void)
     {
         error_handler();
     }
+
+    htim1.Instance               = TIM1;
+    htim1.Init.Prescaler         = 72-1;
+    htim1.Init.CounterMode       = TIM_COUNTERMODE_UP;
+    htim1.Init.Period            = 0xffff-1;
+    htim1.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
+    htim1.Init.RepetitionCounter = 0;
+    htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+
+    if (HAL_OK != HAL_TIM_Base_Init(&htim1))
+    {
+        error_handler();
+    }
+
+    sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+
+    if (HAL_OK != HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig))
+    {
+        error_handler();
+    }
+
+    sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+    sMasterConfig.MasterSlaveMode     = TIM_MASTERSLAVEMODE_DISABLE;
+
+    if (HAL_OK != HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig))
+    {
+        error_handler();
+    }
+
+    HAL_TIM_Base_Start(&htim1);
 }
 
 void HAL_MspInit(void)
@@ -474,6 +550,24 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* huart)
     }
 }
 
+void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* htim_base)
+{
+    if(TIM1 == htim_base->Instance)
+    {
+        /* Peripheral clock enable */
+        __HAL_RCC_TIM1_CLK_ENABLE();
+    }
+}
+
+void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* htim_base)
+{
+    if(TIM1 == htim_base->Instance)
+    {
+        /* Peripheral clock disable */
+        __HAL_RCC_TIM1_CLK_DISABLE();
+    }
+}
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (TIM4 == htim->Instance)
@@ -516,10 +610,10 @@ HAL_StatusTypeDef HAL_InitTick(uint32_t TickPriority)
      * + ClockDivision = 0
      * + Counter direction = Up
      */
-    htim4.Init.Period = (1000000U / 1000U) - 1U;
-    htim4.Init.Prescaler = uwPrescalerValue;
+    htim4.Init.Period        = (1000000U / 1000U) - 1U;
+    htim4.Init.Prescaler     = uwPrescalerValue;
     htim4.Init.ClockDivision = 0;
-    htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim4.Init.CounterMode   = TIM_COUNTERMODE_UP;
     if(HAL_TIM_Base_Init(&htim4) == HAL_OK)
     {
         /* Start the TIM time Base generation in interrupt mode */
