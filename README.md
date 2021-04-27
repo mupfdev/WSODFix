@@ -43,14 +43,17 @@ software and DIY hardware.
 The project is based on a STM32F103C8 microcontroller board a.k.a. a
 [blue pill board](http://reblag.dk/stm32/).
 
-## Status
-
-The firmware is virtually complete and works as expected, at least in
-the simulation.  A test on real hardware is still pending.
-
 ## Hardware
 
+### Wiring diagram
+
 tbd.
+
+### Compatible devices
+
+WSODFix has been tested with the following phones so far:
+
+- Nokia N-Gage (NEM-4)
 
 ## FBus
 
