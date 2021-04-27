@@ -47,6 +47,8 @@ The project is based on a STM32F103C8 microcontroller board a.k.a. a
 
 ### Wiring diagram
 
+[![Prototype](.media/prototype-tn.png)](.media/prototype.jpg?raw=true "Prototype")
+
 The voltage divider is almost certainly optional.  Alternatively, you
 can also set Vpp to 3V3.
 
