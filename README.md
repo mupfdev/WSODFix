@@ -4,7 +4,7 @@
 <a href="https://github.com/mupfelofen-de/WSODFix">
     <img src="https://img.shields.io/badge/project-GitHub-blue?style=flat?svg=true" alt="GitHub project" />
 </a>
-<a href="https://github.com/mupfelofen-de/eszFW/blob/master/LICENSE.md">
+<a href="https://github.com/mupfelofen-de/WSODFix/blob/master/LICENSE.md">
     <img src="https://img.shields.io/badge/licence-MIT-blue?style=flat?svg=true" alt="Licence" />
 </a>
 <a href="https://www.travis-ci.com/mupfelofen-de/WSODFix">
@@ -44,6 +44,16 @@ The project is based on a STM32F103C8 microcontroller board a.k.a. a
 [blue pill board](http://reblag.dk/stm32/).
 
 ## Hardware
+
+### Parts needed
+
+- UFS flashing cable or any way to connect the microcontroller to the
+  corresponding pins on the phone (for example [N-Gage cable
+  schematics](docs/Nokia_N-Gage_cable.pdf)),
+- [blue pill board](http://reblag.dk/stm32/)
+- RJ45 Ethernet jack,
+- [RJ45 Breakout](https://www.sparkfun.com/products/716),
+- 1× 1kΩ and 1× 10kΩ resistor (optional).
 
 ### Wiring diagram
 
@@ -89,7 +99,7 @@ RJ45                        3V3             3V0
 
 ```
 
-### Compatible devices
+### Compatible phones
 
 WSODFix has been tested with the following phones so far:
 
