@@ -48,9 +48,9 @@ The project is based on a STM32F103C8 microcontroller board a.k.a. a
 ### Parts needed
 
 - UFS flashing cable or any way to connect the microcontroller to the
-  corresponding pins on the phone (for example [N-Gage cable
+  corresponding pins on the phone (for example see the [N-Gage cable
   schematics](docs/Nokia_N-Gage_cable.pdf)),
-- [blue pill board](http://reblag.dk/stm32/)
+- [STM32 blue pill board](http://reblag.dk/stm32/)
 - RJ45 Ethernet jack,
 - [RJ45 Breakout](https://www.sparkfun.com/products/716),
 - 1× 1kΩ and 1× 10kΩ resistor (optional).
