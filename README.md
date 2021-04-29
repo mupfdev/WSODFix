@@ -14,6 +14,8 @@
 
 ## About
 
+[![WSODFix](.media/wsodfix-tn.png)](.media/wsodfix.jpg?raw=true "WSODFix")
+
 Nokia mobile phones such as the N-Gage running early versions of the
 Symbian OS suffer from a very common problem widely known as the White
 Screen of Death or simply WSOD.  This happens when the internal memory
