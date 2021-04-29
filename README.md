@@ -45,6 +45,17 @@ software and DIY hardware.
 The project is based on a STM32F103C8 microcontroller board a.k.a. a
 [blue pill board](http://reblag.dk/stm32/).
 
+## Status
+
+The current firmware is perfectly functional, but unfortunately also
+very error-prone, as the message flow is very strictly predefined.  This
+is not optimal, but completely sufficient as a proof-of-concept.
+WSODFix serves its purpose.
+
+For the next version, I have the main focus on the dynamic detection and
+processing of individual FBus messages, so that WSODFix can react better
+to possible edge cases.
+
 ## Hardware
 
 ### Parts needed
@@ -166,8 +177,14 @@ RECV [1E 10 00 7F 00 02] [58 01]                     [46 6C] (ack format user ar
 ca. 40-50s pause
 
 RECV 55 55 (synchronise FBus)
+RECV [1E 10 00 58 00 08] [0B "38* 00 08 00 00 01 (43)] [14 33] (done)
+* The "38" seems to vary from run to run.  I do not yet know what this byte represents.
 
-RECV [1E 10 00 58 00 08] [0B 38 00 08 00 00 01 (43)] [14 33] (done)
+-- On some devices (I have no idea what it is yet)
+RECV 55 55
+RECV [1E FF 00 15 00 08] [00 27 00 C0 05 04 01 C2]   [1A C3]
+--
+
 SEND [1E 00 10 7F 00 02] [58 (03)]                   [56 7E] (ack done)
 ```
 
