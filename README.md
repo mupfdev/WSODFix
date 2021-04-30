@@ -99,6 +99,9 @@ The FBus is a bi-directional full-duplex serial type bus running at
     00 = Phone
     10 = Twister
   Byte 3 - Message type / command
+    15 = Handshake/Auth ?
+    7F = Acknowledge
+    58 = Format user area
   Byte 4 - Payload size in bytes (MSB)
   Byte 5 - Payload size in bytes (LSB)
 
@@ -121,26 +124,26 @@ analyser.
 [![Logic analyser](.media/logic-analyser-tn.png)](.media/logic-analyser.jpg?raw=true "Logic analyser")
 
 ```text
-SEND 55 55 55 55 55 55 (synchronise FBus)
+SEND 55 55 55 55 55 55 (synchronisation)
 
 ca. 60ms pause
 
-SEND [1E 00 10 15 00 08] [00 06 00 02 00 00 01 60]   [0F 79] (handshake)
-RECV [1E 10 00 7F 00 02] [15 00]                     [0B 6D] (ack handshake)
-RECV [1E 10 00 15 00 08] [06 27 00 65 05 05 01 (42)] [1C 08] (handshake)
-SEND [1E 00 10 7F 00 02] [15 (02)]                   [1B 7F] (ack handshake)
+SEND [1E 00 10 15 00 08] [00 06 00 02 00 00 01 60]   [0F 79]
+RECV [1E 10 00 7F 00 02] [15 00]                     [0B 6D]
+RECV [1E 10 00 15 00 08] [06 27 00 65 05 05 01 (42)] [1C 08]
+SEND [1E 00 10 7F 00 02] [15 (02)]                   [1B 7F]
 
 ca. 16ms pause
 
-SEND [1E 00 10 58 00 08] [00 0B 00 07 06 00 01 41]   [09 1D] (format user area)
-RECV [1E 10 00 7F 00 02] [58 01]                     [46 6C] (ack format user area)
+SEND [1E 00 10 58 00 08] [00 0B 00 07 06 00 01 41]   [09 1D]
+RECV [1E 10 00 7F 00 02] [58 01]                     [46 6C]
 
 ca. 40-50s pause
 
-RECV 55 55 (synchronise FBus)
-RECV [1E 10 00 58 00 08] [0B 38 00 08 00 00 01 (43)] [14 33] (done)
+RECV 55 55 (synchronisation)
+RECV [1E 10 00 58 00 08] [0B 38 00 08 00 00 01 (43)] [14 33]
 
-SEND [1E 00 10 7F 00 02] [58 (03)]                   [56 7E] (ack done)
+SEND [1E 00 10 7F 00 02] [58 (03)]                   [56 7E]
 ```
 
 Surely you have noticed the bracketed numbers.  These are variable.  The
