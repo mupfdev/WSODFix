@@ -75,47 +75,10 @@ WSODFix has been tested with the following phones so far:
 
 [![Prototype](.media/prototype-tn.png)](.media/prototype.jpg?raw=true "Prototype")
 
-The voltage divider is almost certainly optional.  Alternatively, you
-can also set Vpp to 3V3.
+Note: The voltage divider is almost certainly optional.  Alternatively,
+you can also set Vpp to 3V3.
 
-Optionally, another status LED can be connected between PB12 and 3V3.
-
-```text
-STM32F103C8                        RJ45
-+----------+  3V3     5V0          +--------+  3V0
-|          |   |       |           |        |   |
-|      3V3 +---+       +-----------+ 5 P5v  |   |
-|          |           |           |        |   |
-|       5V +-----------+           | 1 Vpp  +---+
-|          |                       |        |
-|      PB1 +-----------------------+ 6 IBI  |
-|          |                       |        |
-|     PB10 +-----------------------+ 4 TxD  |
-|          |                       |        |
-|     PB11 +-----------------------+ 5 RxD  |
-|          |                       |        |
-|      GND +-----------+-----------+ 2 Gnd  |
-|          |           |           |        |
-|          |           +-----------+ 3 Mbus |
-|          |           |           |        |
-|          |          ---          | 7 P3v  +---> N/C
-+----------+          GND          |        |
-Blue pill                          +--------+
-
-
-RJ45                        3V3             3V0
-+--+--+--+--+--+--+--+--+    |               |
-|1 |2 |3 |4 |5 |6 |7 |8 |    |   +-------+   |   +-------+
-+--+--+--+--+--+--+--+--+    +---+ R 1k  +---+---+ R 10k +---+
-|                       |        +-------+       +-------|   |
-|                       |                                    |
-+---+---------------+---+                                   ---
-    |               |                                       GND
-    +----+-----+----+
-         |     |
-         +-----+
-
-```
+[![Schematic](.media/schematic.svg)](.media/schematic.svg?raw=true "Schematic")
 
 ## FBus
 
@@ -186,8 +149,8 @@ equipment responds with this number minus 0x40.
 
 Moreover, this number is apparently a kind of frame counter.  For
 example, if the phone sends an initial 0x42, the next message sent from
-the phone to the flasher will contain the number 0x43. After 0x47, there is
-an overflow back to 0x40.
+the phone to the flasher will contain the number 0x43.  After 0x47,
+there is an overflow back to 0x40.
 
 ## Installation
 
