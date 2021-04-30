@@ -47,14 +47,7 @@ The project is based on a STM32F103C8 microcontroller board a.k.a. a
 
 ## Status
 
-The current firmware is perfectly functional, but unfortunately also
-very error-prone, as the message flow is very strictly predefined.  This
-is not optimal, but completely sufficient as a proof-of-concept.
-WSODFix serves its purpose.
-
-For the next version, I have the main focus on the dynamic detection and
-processing of individual FBus messages, so that WSODFix can react better
-to possible edge cases.
+The firmware is 100% functional.
 
 ## Hardware
 
@@ -180,22 +173,17 @@ RECV 55 55 (synchronise FBus)
 RECV [1E 10 00 58 00 08] [0B "38* 00 08 00 00 01 (43)] [14 33] (done)
 * The "38" seems to vary from run to run.  I do not yet know what this byte represents.
 
--- On some devices (I have no idea what it is yet)
-RECV 55 55
-RECV [1E FF 00 15 00 08] [00 27 00 C0 05 04 01 C2]   [1A C3]
---
-
 SEND [1E 00 10 7F 00 02] [58 (03)]                   [56 7E] (ack done)
 ```
 
 Surely you have noticed the bracketed numbers.  These are variable.  The
-Symbian phone sends an initial value between 40 and 47.  The flashing
-equipment responds with this number minus 40.
+Symbian phone sends an initial value between 0x40 and 0x47.  The flashing
+equipment responds with this number minus 0x40.
 
 Moreover, this number is apparently a kind of frame counter.  For
-example, if the phone sends an initial 42, the next message sent from
-the phone to the flasher will contain the number 43. After 47, there is
-an overflow back to 40.
+example, if the phone sends an initial 0x42, the next message sent from
+the phone to the flasher will contain the number 0x43. After 0x47, there is
+an overflow back to 0x40.
 
 ## Installation
 
