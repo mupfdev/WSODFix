@@ -12,63 +12,187 @@
 #include "stm32f1xx_hal.h"
 #include "stm32f1xx_hal_tim.h"
 
-typedef enum
-{
-    FBUS_HANDSHAKE = 0x15,
-    FBUS_ACK       = 0x7F,
-    FBUS_FORMAT    = 0x58
-
-} fbus_command;
+#define BUF_SIZE     32
+#define FBUS_MSG_LEN 16
+#define FBUS_RX_ADDR 0x10
+#define FBUS_TX_ADDR 0x00
 
 typedef enum
 {
-    SEND_SYNC = 0,           /* Send [55 55 55 55 55 55]                                   */
-    SEND_HANDSHAKE,          /* Send [1E 00 10 15 00 08] [00 06 00 02 00 00 01 60] [0F 79] */
-    RECV_ACK_RECV_HANDSHAKE, /* Recv [1E 10 00 7F 00 02] [15 00]                   [0B 6D] */
-                             /* Recv [1E 10 00 15 00 08] [06 27 00 65 05 05 01 xx] [1C xx] */
-    SEND_HANDSHAKE_ACK,      /* Send [1E 00 10 7F 00 02] [15 xx]                   [1B xx] */
-    SEND_FORMAT,             /* Send [1E 00 10 58 00 08] [00 0B 00 07 06 00 01 41] [09 1D] */
-    RECV_FORMAT_ACK,         /* Recv [1E 10 00 7F 00 02] [58 01]                   [46 6C] */
-    RECV_SYNC_RECV_FORMAT,   /* Recv [55 55]                                               */
-                             /* Recv [1E 10 00 58 00 08] [0B xx 00 08 00 00 01 xx] [14 xx] */
-    SEND_FORMAT_ACK,         /* Send [1E 00 10 7F 00 02] [58 xx]                   [56 xx] */
-    ALL_DONE,
-    HALT_ERROR
+    LED_IDLE               = 500,
+    LED_ENTER_SERVICE_MODE = 1000,
+    LED_FORMATTING         = 30,
+    LED_ALL_DONE           = 0
 
-} app_progress;
-
-typedef enum
-{
-    LED_OK         = 500,
-    LED_ERROR      = 100,
-    LED_FORMATTING = 30,
-
-} led_pattern;
+} led_t;
 
 UART_HandleTypeDef huart3;
 TIM_HandleTypeDef  htim2;
 TIM_HandleTypeDef  htim4;
 
-static uint8_t      rx_buffer[26] = { 0 };
-static int          frame_counter = 0;
-static app_progress progress      = SEND_SYNC;
-static led_pattern  blink_delay   = LED_OK;
+static bool    all_done        = false;
+static bool    initiate_format = false;
+static uint8_t rx_byte         = 0;
+static led_t   status_led      = LED_IDLE;
+static uint8_t frame_counter   = 0;
+static uint8_t tx_buffer[16]   = {
+    0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
+    0x00, 0x06, 0x00, 0x02, 0x00, 0x00, 0x01, 0x60,
+    0x0F, 0x79
+};
 
 static void system_init(void);
-static void calculate_crc(uint8_t* buffer, uint8_t* even_crc, uint8_t* odd_crc, bool append);
+static void service_mode_init(void);
+static void comm_init(void);
+static void calculate_crc(uint8_t buffer[16], uint8_t* even_crc, uint8_t* odd_crc, bool append);
 static void error_handler(void);
-static bool is_message_valid(uint8_t* buffer);
-static int  send_command(fbus_command command, uint8_t payload_size, uint8_t* payload);
-static int  sync_fbus(void);
 
 int main(void)
 {
     system_init();
+    service_mode_init();
+    comm_init();
 
-    /* Enter service mode. */
-    HAL_Delay(2);
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
-    HAL_Delay(7700);
+    while (1) {}
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    uint8_t fbus_message[FBUS_MSG_LEN] = { 0 };
+    uint8_t fbus_header_index          = 0;
+    bool    fbus_header_found          = false;
+
+    static uint8_t ring_buffer[BUF_SIZE] = { 0 };
+    static uint8_t ring_buffer_index     = 0;
+
+    ring_buffer[ring_buffer_index] = rx_byte;
+
+    for (uint8_t index = 0; index < BUF_SIZE; index += 1)
+    {
+        if (0x1E == ring_buffer[index])
+        {
+            fbus_header_index = index;
+            fbus_header_found = true;
+            break;
+        }
+    }
+
+    if (true == fbus_header_found)
+    {
+        uint8_t payload_size  = 0;
+        uint8_t even_crc      = 0;
+        uint8_t odd_crc       = 0;
+        uint8_t message_index = fbus_header_index;
+
+        /* Extract FBus message */
+        for (uint8_t index = 0; index < FBUS_MSG_LEN; index += 1)
+        {
+            fbus_message[index]  = ring_buffer[message_index];
+            message_index       += 1;
+
+            if (BUF_SIZE <= message_index)
+            {
+                message_index = 0;
+            }
+        }
+        payload_size = fbus_message[5];
+
+        /* Validate FBus message */
+        if (0 == payload_size || payload_size > 8)
+        {
+            /* Invalid payload size */
+        }
+        else
+        {
+            calculate_crc(fbus_message, &even_crc, &odd_crc, false);
+
+            if ((fbus_message[6 + payload_size] == even_crc) &&
+                (fbus_message[7 + payload_size] == odd_crc))
+            {
+                /* Valid message found */
+                /* Check if message is for us */
+                if (FBUS_RX_ADDR == fbus_message[1])
+                {
+                    bool send_ack = true;
+                    switch (fbus_message[3])
+                    {
+                        case 0x7F:
+                            send_ack = false;
+                            break;
+                        case 0x58:
+                            all_done = true;
+                            break;
+                        default:
+                           frame_counter = fbus_message[5 + payload_size];
+                           break;
+                    }
+
+                    if (true == send_ack)
+                    {
+                        uint8_t ack_buffer[10] = {
+                            0x1E, FBUS_TX_ADDR, FBUS_RX_ADDR, 0x7F,
+                            0x00, 0x02, fbus_message[3], frame_counter - 0x40
+                        };
+                        calculate_crc(ack_buffer, &even_crc, &odd_crc, true);
+                        HAL_UART_Transmit_IT(&huart3, ack_buffer, 10);
+
+                        if (0x15 == fbus_message[3])
+                        {
+                            initiate_format = true;
+                        }
+                    }
+                }
+                else
+                {
+                    /* Nothing to do here; message can be ignored */
+                }
+
+                /* Invalidate processed message */
+                ring_buffer[fbus_header_index] = 0x00;
+            }
+        }
+    }
+
+    ring_buffer_index += 1;
+    if (BUF_SIZE <= ring_buffer_index)
+    {
+        ring_buffer_index = 0;
+    }
+    HAL_UART_Receive_IT(&huart3, &rx_byte, 1);
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+    /* Handshake acknowledge sent: initiate user area format */
+    if (true == initiate_format)
+    {
+        tx_buffer[3]  = 0x58;
+        tx_buffer[4]  = 0x00;
+        tx_buffer[5]  = 0x08;
+        tx_buffer[6]  = 0x00;
+        tx_buffer[7]  = 0x0B;
+        tx_buffer[8]  = 0x00;
+        tx_buffer[9]  = 0x07;
+        tx_buffer[10] = 0x06;
+        tx_buffer[11] = 0x00;
+        tx_buffer[12] = 0x01;
+        tx_buffer[13] = 0x41;
+        tx_buffer[14] = 0x09;
+        tx_buffer[15] = 0x1D;
+
+        status_led      = LED_FORMATTING;
+        initiate_format = false;
+        HAL_UART_Transmit_IT(&huart3, tx_buffer, 16);
+    }
+}
+
+static void service_mode_init(void)
+{
+    led_t prev_pattern = status_led;
+
+    status_led = LED_ENTER_SERVICE_MODE;
+
+    HAL_Delay(10000);
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
     HAL_Delay(987);
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
@@ -76,198 +200,57 @@ int main(void)
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
     HAL_Delay(592);
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
-    HAL_Delay(4000);
+    HAL_Delay(5000);
 
-    while(1)
-    {
-        switch (progress)
-        {
-            case HALT_ERROR:
-                blink_delay = LED_ERROR;
-                break;
-            case SEND_SYNC:
-                if (0 > sync_fbus())
-                {
-                    error_handler();
-                }
-                HAL_Delay(60);
-                progress = SEND_HANDSHAKE;
-                continue;
-            case SEND_HANDSHAKE:
-            {
-                uint8_t payload[8] = { 0x00, 0x06, 0x00, 0x02, 0x00, 0x00, 0x01, 0x60 };
-                if (0 > send_command(FBUS_HANDSHAKE, 8, payload))
-                {
-                    error_handler();
-                }
-                progress = RECV_ACK_RECV_HANDSHAKE;
-                continue;
-            }
-            case RECV_ACK_RECV_HANDSHAKE:
-                HAL_UART_Receive_IT(&huart3, &rx_buffer[0], 26);
-                break;
-            case SEND_HANDSHAKE_ACK:
-            {
-                uint8_t payload[2] = { FBUS_HANDSHAKE, frame_counter - 0x40 };
-                if (0 > send_command(FBUS_ACK, 2, payload))
-                {
-                    error_handler();
-                }
-                progress = SEND_FORMAT;
-                continue;
-            }
-            case SEND_FORMAT:
-            {
-                uint8_t payload[8] = { 0x00, 0x0B, 0x00, 0x07, 0x06, 0x00, 0x01, 0x41 };
-                HAL_Delay(16);
-                if (0 > send_command(FBUS_FORMAT, 8, payload))
-                {
-                    error_handler();
-                }
-                progress = RECV_FORMAT_ACK;
-                continue;
-            }
-            case RECV_FORMAT_ACK:
-                HAL_UART_Receive_IT(&huart3, &rx_buffer[0], 10);
-                break;
-            case RECV_SYNC_RECV_FORMAT:
-                HAL_UART_Receive_IT(&huart3, &rx_buffer[0], 18);
-                break;
-            case SEND_FORMAT_ACK:
-            {
-                uint8_t payload[2] = { FBUS_FORMAT, frame_counter - 0x40 };
-                if (0 > send_command(FBUS_ACK, 2, payload))
-                {
-                    error_handler();
-                }
-                progress = ALL_DONE;
-                continue;
-            }
-            case ALL_DONE:
-                goto all_done;
-            default:
-                break;
-        }
-    }
-
-all_done:
-    HAL_TIM_Base_Stop_IT(&htim2);
-    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
-    while (1) {}
+    status_led = prev_pattern;
 }
 
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+static void comm_init(void)
 {
-    if (RECV_ACK_RECV_HANDSHAKE == progress)
+    if (HAL_OK != HAL_UART_Transmit(&huart3, tx_buffer, 6, 100))
     {
-        uint8_t* msg_ack       = &rx_buffer[0];
-        uint8_t* msg_handshake = &rx_buffer[10];
+        error_handler();
+    }
+    HAL_Delay(60);
 
-        if (false == is_message_valid(msg_ack) ||
-            false == is_message_valid(msg_handshake))
-        {
-            progress = HALT_ERROR;
-            goto clear_rx_buffer;
-        }
+    tx_buffer[0] = 0x1E;
+    tx_buffer[1] = FBUS_TX_ADDR;
+    tx_buffer[2] = FBUS_RX_ADDR;
+    tx_buffer[3] = 0x15;
+    tx_buffer[4] = 0x00;
+    tx_buffer[5] = 0x08;
+    if (HAL_OK != HAL_UART_Transmit(&huart3, tx_buffer, 16, 100))
+    {
+        error_handler();
+    }
 
-        if (msg_ack[0]        == 0x1E &&
-            msg_ack[3]        == FBUS_ACK &&
-            msg_ack[6]        == FBUS_HANDSHAKE &&
-            msg_handshake[0]  == 0x1E &&
-            msg_handshake[3]  == FBUS_HANDSHAKE &&
-            msg_handshake[6]  == 0x06 &&
-            msg_handshake[7]  == 0x27 &&
-            msg_handshake[8]  == 0x00 &&
-            msg_handshake[9]  == 0x65 &&
-            msg_handshake[10] == 0x05 &&
-            msg_handshake[11] == 0x05 &&
-            msg_handshake[12] == 0x01)
+    HAL_UART_Receive_IT(&huart3, &rx_byte, 1);
+}
+
+static void calculate_crc(uint8_t buffer[16], uint8_t* even_crc, uint8_t* odd_crc, bool append)
+{
+    uint8_t payload_size = buffer[5];
+
+    *even_crc = 0;
+    *odd_crc  = 0;
+
+    for (int i = 0; i < 6 + payload_size; i += 1)
+    {
+        if (i % 2 == 0)
         {
-            frame_counter = msg_handshake[13];
-            progress      = SEND_HANDSHAKE_ACK;
-            memset(&rx_buffer[0], 0, 26);
+            *even_crc ^= buffer[i];
         }
         else
         {
-            progress = HALT_ERROR;
-            memset(&rx_buffer[0], 0, 26);
-            goto clear_rx_buffer;
+            *odd_crc ^= buffer[i];
         }
     }
-    else if (RECV_FORMAT_ACK == progress)
+
+    if (true == append)
     {
-        uint8_t* msg_ack = &rx_buffer[0];
-
-        if (false == is_message_valid(msg_ack))
-        {
-            progress = HALT_ERROR;
-            memset(&rx_buffer[0], 0, 26);
-            goto clear_rx_buffer;
-        }
-
-        if (msg_ack[0]        == 0x1E &&
-            msg_ack[3]        == FBUS_ACK &&
-            msg_ack[6]        == FBUS_FORMAT)
-        {
-            progress    = RECV_SYNC_RECV_FORMAT;
-            blink_delay = LED_FORMATTING;
-        }
-        else
-        {
-            progress = HALT_ERROR;
-            memset(&rx_buffer[0], 0, 26);
-            goto clear_rx_buffer;
-        }
+        buffer[6 + payload_size] = *even_crc;
+        buffer[7 + payload_size] = *odd_crc;
     }
-    else if (RECV_SYNC_RECV_FORMAT == progress)
-    {
-        uint8_t* msg_sync   = &rx_buffer[0];
-        uint8_t* msg_format = &rx_buffer[2];
-
-        if (false == is_message_valid(msg_format))
-        {
-            progress = HALT_ERROR;
-            memset(&rx_buffer[0], 0, 26);
-            goto clear_rx_buffer;
-        }
-
-        if (msg_sync[0]    == 0x55 &&
-            msg_sync[1]    == 0x55 &&
-            msg_format[0]  == 0x1E &&
-            msg_format[1]  == 0x10 &&
-            msg_format[3]  == FBUS_FORMAT)
-        {
-            frame_counter = msg_format[13];
-            progress      = SEND_FORMAT_ACK;
-            memset(&rx_buffer[0], 0, 26);
-            goto clear_rx_buffer;
-        }
-        else if (msg_sync[0]   == 0x55 &&
-                 msg_sync[1]   == 0x55 &&
-                 msg_format[0] == 0x1E &&
-                 msg_format[1] == 0xFF)
-        {
-            /* I have observed on some phones that during formatting an
-             * FBus message is sent to the address 0xFF.  This has
-             * exactly the same size as the format confirmation and also
-             * contains the synchronisation bytes.  For the moment, I
-             * simply discard this message.
-             *
-             * If you have any idea what this is about, let me know.
-             */
-            progress = RECV_SYNC_RECV_FORMAT;
-            return;
-        }
-        else
-        {
-            progress = RECV_SYNC_RECV_FORMAT;
-            goto clear_rx_buffer;
-        }
-    }
-clear_rx_buffer:
-    return;
-    //memset(&rx_buffer[0], 0, 26);
 }
 
 static void system_init(void)
@@ -319,7 +302,7 @@ static void system_init(void)
     /* Configure GPIO pin Output Level */
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1,  GPIO_PIN_RESET);
 
     /* Configure GPIO pin : PC13 */
     GPIO_InitStruct.Pin   = GPIO_PIN_13;
@@ -392,101 +375,12 @@ static void system_init(void)
     }
 }
 
-static void calculate_crc(uint8_t buffer[16], uint8_t* even_crc, uint8_t* odd_crc, bool append)
-{
-    uint8_t payload_size = buffer[5];
-
-    *even_crc = 0;
-    *odd_crc  = 0;
-
-    for (int i = 0; i < 6 + payload_size; i += 1)
-    {
-        if (i % 2 == 0)
-        {
-            *even_crc ^= buffer[i];
-        }
-        else
-        {
-            *odd_crc ^= buffer[i];
-        }
-    }
-
-    if (true == append)
-    {
-        buffer[6 + payload_size] = *even_crc;
-        buffer[7 + payload_size] = *odd_crc;
-    }
-}
-
 static void error_handler(void)
 {
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
     __disable_irq();
     while (1) {}
-}
-
-static bool is_message_valid(uint8_t buffer[16])
-{
-    uint8_t payload_size = buffer[5];
-    uint8_t even_crc     = 0;
-    uint8_t odd_crc      = 0;
-
-    if (buffer[0] != 0x1E)
-    {
-        return false;
-    }
-
-    if (payload_size % 2 != 0 || payload_size > 8)
-    {
-        return false;
-    }
-
-    calculate_crc(buffer, &even_crc, &odd_crc, false);
-    if (buffer[6 + payload_size] != even_crc)
-    {
-        return false;
-    }
-    if (buffer[7 + payload_size] != odd_crc)
-    {
-        return false;
-    }
-
-    return true;
-}
-
-static int send_command(fbus_command command, uint8_t payload_size, uint8_t* payload)
-{
-    uint8_t even_crc      = 0;
-    uint8_t odd_crc       = 0;
-    uint8_t tx_buffer[16] = { 0x1E, 0x00, 0x10, command, 0x00 };
-
-    tx_buffer[5] = payload_size;
-    memcpy(&tx_buffer[6], &payload[0], payload_size);
-    calculate_crc(tx_buffer, &even_crc, &odd_crc, true);
-
-    if (false == is_message_valid(tx_buffer))
-    {
-        return -2;
-    }
-
-    if (HAL_OK != HAL_UART_Transmit(&huart3, tx_buffer, 8 + payload_size, 100))
-    {
-        return -1;
-    }
-
-    return 0;
-}
-
-static int sync_fbus(void)
-{
-    uint8_t tx_buffer[6] = { 0x55, 0x55, 0x55, 0x55, 0x55, 0x55 };
-
-    if (HAL_OK != HAL_UART_Transmit(&huart3, tx_buffer, 6, 100))
-    {
-        return -1;
-    }
-    return 0;
 }
 
 void HAL_MspInit(void)
@@ -578,12 +472,20 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
     if (TIM2 == htim->Instance)
     {
-        ms_count += 1;
-        if (ms_count >= blink_delay)
+        if (true == all_done)
         {
-            HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-            HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_12);
-            ms_count = 0;
+            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
+        }
+        else
+        {
+            ms_count += 1;
+            if (ms_count >= (uint32_t)status_led)
+            {
+                HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+                HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_12);
+                ms_count = 0;
+            }
         }
     }
 
