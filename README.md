@@ -47,7 +47,16 @@ The project is based on a STM32F103C8 microcontroller board a.k.a. a
 
 ## Status
 
+### Firmware
+
 The firmware is 100% functional.
+
+### Compatible phones
+
+WSODFix has been tested with the following phones so far:
+
+- Nokia N-Gage (NEM-4)
+- Nokia N-Gage QD (RH-29)
 
 ## Hardware
 
@@ -59,7 +68,8 @@ The firmware is 100% functional.
 - [STM32 blue pill board](http://reblag.dk/stm32/)
 - RJ45 Ethernet jack,
 - [RJ45 Breakout](https://www.sparkfun.com/products/716),
-- 1× 1kΩ and 1× 10kΩ resistor (optional).
+- 1× 1kΩ and 1× 10kΩ resistor (optional),
+- 1× External status LED + dropping resistor (optional).
 
 ### Wiring diagram
 
@@ -67,6 +77,8 @@ The firmware is 100% functional.
 
 The voltage divider is almost certainly optional.  Alternatively, you
 can also set Vpp to 3V3.
+
+Optionally, another status LED can be connected between PB12 and 3V3.
 
 ```text
 STM32F103C8                        RJ45
@@ -104,13 +116,6 @@ RJ45                        3V3             3V0
          +-----+
 
 ```
-
-### Compatible phones
-
-WSODFix has been tested with the following phones so far:
-
-- Nokia N-Gage (NEM-4)
-- Nokia N-Gage QD (RH-29)
 
 ## FBus
 
@@ -170,8 +175,7 @@ RECV [1E 10 00 7F 00 02] [58 01]                     [46 6C] (ack format user ar
 ca. 40-50s pause
 
 RECV 55 55 (synchronise FBus)
-RECV [1E 10 00 58 00 08] [0B "38* 00 08 00 00 01 (43)] [14 33] (done)
-* The "38" seems to vary from run to run.  I do not yet know what this byte represents.
+RECV [1E 10 00 58 00 08] [0B 38 00 08 00 00 01 (43)] [14 33] (done)
 
 SEND [1E 00 10 7F 00 02] [58 (03)]                   [56 7E] (ack done)
 ```
