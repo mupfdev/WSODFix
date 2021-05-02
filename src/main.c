@@ -1,8 +1,8 @@
 /* Spdx-License-Identifier: MIT */
 /**
- * @file    main.c
- * @brief   WSODFix WSOD fixer for Symbian phones by Nokia
- * @details Fixes the WSOD problem by formatting the user area via FBus
+ * @file main.c
+ * @brief WSODFix A repair tool for Symbian Nokia phones affected by the
+ *        infamous white screen of death.
  */
 
 #include <stdbool.h>
@@ -123,8 +123,8 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
                             all_done = true;
                             break;
                         default:
-                           frame_counter = fbus_message[5 + payload_size];
-                           break;
+                            frame_counter = fbus_message[5 + payload_size];
+                            break;
                     }
 
                     if (true == send_ack)
@@ -456,14 +456,14 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* htim_base)
 
 void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* htim_base)
 {
-  if (TIM2 == htim_base->Instance)
-  {
-    /* Peripheral clock disable */
-    __HAL_RCC_TIM2_CLK_DISABLE();
+    if (TIM2 == htim_base->Instance)
+    {
+        /* Peripheral clock disable */
+        __HAL_RCC_TIM2_CLK_DISABLE();
 
-    /* TIM2 interrupt DeInit */
-    HAL_NVIC_DisableIRQ(TIM2_IRQn);
-  }
+        /* TIM2 interrupt DeInit */
+        HAL_NVIC_DisableIRQ(TIM2_IRQn);
+    }
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
