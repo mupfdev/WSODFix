@@ -17,6 +17,7 @@
 
 ## About
 
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/d9eab430119c4d3da086c71fbfdea25b)](https://app.codacy.com/gh/mupfelofen-de/WSODFix?utm_source=github.com&utm_medium=referral&utm_content=mupfelofen-de/WSODFix&utm_campaign=Badge_Grade_Settings)
 [![WSODFix](.media/wsodfix-tn.jpg)](.media/wsodfix.jpg?raw=true "WSODFix")
 
 Nokia mobile phones such as the N-Gage running early versions of the
