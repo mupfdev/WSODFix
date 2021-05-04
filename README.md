@@ -10,6 +10,9 @@
 <a href="https://www.travis-ci.com/mupfelofen-de/WSODFix">
     <img src="https://www.travis-ci.com/mupfelofen-de/WSODFix.svg?branch=master" alt="Build status" />
 </a>
+<a href="https://www.codacy.com/manual/mupf/eszFW?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=mupfelofen-de/eszFW&amp;utm_campaign=Badge_Grade">
+    <img src=https://app.codacy.com/project/badge/Grade/999c4a824cba43dba68100819699fcfa alt="Codacy Badge" />
+</a>
 </p>
 
 ## About
@@ -58,6 +61,7 @@ The firmware is 100% functional.
 WSODFix has been tested with the following phones so far:
 
 - Nokia N-Gage (NEM-4)
+
 - Nokia N-Gage QD (RH-29)
 
 ## Operating instructions
@@ -71,13 +75,18 @@ boot. This can then only be repaired by a successful run.
    contact pins on the flash adapter will be damaged.  For the N-Gage
    and N-Gage QD, you must first press the adapter against the battery
    contacts and then down.
+
 2. Attach the cable to the RJ45 connector of your WSODFix.
+
 3. Connect the USB cable. Make sure that the USB port used can supply
    sufficient power for the phone and the microcontroller.
+
 4. First, the LED should flash for about 20 seconds at a rate of 1
    second.  This is when the phone enters service mode.
+
 5. Wait until the formatting process begins. The LED then flashes at a
    rate of 30ms.
+
 6. The process is completed when the LED lights up continuously. You can
    then disconnect the phone and try to turn it on.  If the procedure
    fails, try again from the beginning.
@@ -89,10 +98,15 @@ boot. This can then only be repaired by a successful run.
 - UFS flashing cable or any way to connect the microcontroller to the
   corresponding pins on the phone (for example see the [N-Gage cable
   schematics](docs/Nokia_N-Gage_cable.pdf)),
+
 - [STM32 blue pill board](http://reblag.dk/stm32/)
+
 - RJ45 Ethernet jack,
+
 - [RJ45 Breakout](https://www.sparkfun.com/products/716),
+
 - 1× 1kΩ and 1× 10kΩ resistor (optional),
+
 - 1× External status LED + dropping resistor (optional).
 
 ### Wiring diagram
