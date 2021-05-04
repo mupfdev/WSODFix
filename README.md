@@ -168,14 +168,24 @@ RECV [1E 10 00 58 00 08] [0B 38 00 08 00 00 01 (43)] [14 33]
 SEND [1E 00 10 7F 00 02] [58 (03)]                   [56 7E]
 ```
 
-Surely you have noticed the bracketed numbers.  These are variable.  The
-Symbian phone sends an initial value between 0x40 and 0x47.  The flashing
-equipment responds with this number minus 0x40.
+Surely you have noticed the parenthesised numbers.  These vary from run
+to run.  The Symbian phone sends an initial value between 0x40 and 0x47.
+The flashing equipment responds with this number minus 0x40.
 
 Moreover, this number is apparently a kind of frame counter.  For
 example, if the phone sends an initial 0x42, the next message sent from
 the phone to the flasher will contain the number 0x43.  After 0x47,
 there is an overflow back to 0x40.
+
+This frame counter is implemented in WSODFix, but I do not know if it is
+mandatory.  The rest of the payload data is completely ignored.  The
+firmware only checks the message type of the received FBus messages.  In
+my tests, this was 100% reliable.
+
+Unfortunately FBus is a proprietary protocol developed by Nokia.  If you
+have detailed specifications that you would like to share with me, I
+would greatly appreciate it.  This would also help the further
+development of this project.
 
 ## Installation
 
