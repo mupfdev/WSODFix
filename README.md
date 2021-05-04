@@ -60,9 +60,9 @@ The firmware is 100% functional.
 
 WSODFix has been tested with the following phones so far:
 
-- Nokia N-Gage (NEM-4)
+-   Nokia N-Gage (NEM-4)
 
-- Nokia N-Gage QD (RH-29)
+-   Nokia N-Gage QD (RH-29)
 
 ## Operating instructions
 
@@ -70,44 +70,44 @@ Important: Never use WSODFix with a working phone! If the formatting
 fails or is interrupted in the process, the device may no longer
 boot. This can then only be repaired by a successful run.
 
-1. Connect the UFS flashing cable to your phone.  It is very important
-   to follow the correct insertion and removal procedure, otherwise the
-   contact pins on the flash adapter will be damaged.  For the N-Gage
-   and N-Gage QD, you must first press the adapter against the battery
-   contacts and then down.
+1.  Connect the UFS flashing cable to your phone.  It is very important
+    to follow the correct insertion and removal procedure, otherwise the
+    contact pins on the flash adapter will be damaged.  For the N-Gage
+    and N-Gage QD, you must first press the adapter against the battery
+    contacts and then down.
 
-2. Attach the cable to the RJ45 connector of your WSODFix.
+2.  Attach the cable to the RJ45 connector of your WSODFix.
 
-3. Connect the USB cable. Make sure that the USB port used can supply
-   sufficient power for the phone and the microcontroller.
+3.  Connect the USB cable. Make sure that the USB port used can supply
+    sufficient power for the phone and the microcontroller.
 
-4. First, the LED should flash for about 20 seconds at a rate of 1
-   second.  This is when the phone enters service mode.
+4.  First, the LED should flash for about 20 seconds at a rate of 1
+    second.  This is when the phone enters service mode.
 
-5. Wait until the formatting process begins. The LED then flashes at a
-   rate of 30ms.
+5.  Wait until the formatting process begins. The LED then flashes at a
+    rate of 30ms.
 
-6. The process is completed when the LED lights up continuously. You can
-   then disconnect the phone and try to turn it on.  If the procedure
-   fails, try again from the beginning.
+6.  The process is completed when the LED lights up continuously. You
+    can then disconnect the phone and try to turn it on.  If the
+    procedure fails, try again from the beginning.
 
 ## Hardware
 
 ### Parts needed
 
-- UFS flashing cable or any way to connect the microcontroller to the
-  corresponding pins on the phone (for example see the [N-Gage cable
-  schematics](docs/Nokia_N-Gage_cable.pdf)),
+-  UFS flashing cable or any way to connect the microcontroller to the
+   corresponding pins on the phone (for example see the [N-Gage cable
+   schematics](docs/Nokia_N-Gage_cable.pdf)),
 
-- [STM32 blue pill board](http://reblag.dk/stm32/)
+-  [STM32 blue pill board](http://reblag.dk/stm32/)
 
-- RJ45 Ethernet jack,
+-  RJ45 Ethernet jack,
 
-- [RJ45 Breakout](https://www.sparkfun.com/products/716),
+-  [RJ45 Breakout](https://www.sparkfun.com/products/716),
 
-- 1× 1kΩ and 1× 10kΩ resistor (optional),
+-  1× 1kΩ and 1× 10kΩ resistor (optional),
 
-- 1× External status LED + dropping resistor (optional).
+-  1× External status LED + dropping resistor (optional).
 
 ### Wiring diagram
 
