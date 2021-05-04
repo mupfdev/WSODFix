@@ -14,7 +14,7 @@
 
 ## About
 
-[![WSODFix](.media/wsodfix-tn.png)](.media/wsodfix.jpg?raw=true "WSODFix")
+[![WSODFix](.media/wsodfix-tn.jpg)](.media/wsodfix.jpg?raw=true "WSODFix")
 
 Nokia mobile phones such as the N-Gage running early versions of the
 Symbian OS suffer from a very common problem widely known as the White
@@ -32,6 +32,8 @@ addition to hardware licences in the form of a dongle.  Also, as new
 devices would come out, old ones would literally be rendered unusable by
 the manufacturers via the internet or sometimes by malware-infected
 software released by competitors.
+
+[![Twister](.media/twister-tn.jpg)](.media/twister.jpg?raw=true "Twister")
 
 There is official software with which some of these devices can be
 repaired and reactivated with, but access to reliable information is
@@ -95,8 +97,6 @@ boot. This can then only be repaired by a successful run.
 
 ### Wiring diagram
 
-[![Prototype](.media/prototype-tn.png)](.media/prototype.jpg?raw=true "Prototype")
-
 Note: The voltage divider is almost certainly optional.  Alternatively,
 you can also set Vpp to 3V3.
 
@@ -140,10 +140,10 @@ The FBus is a bi-directional full-duplex serial type bus running at
 Here is a brief summary of the messages exchanged between the flashing
 equipment and the Symbian phone when the user area is formatted.
 
+[![Logic analyser](.media/logic-analyser-tn.jpg)](.media/logic-analyser.jpg?raw=true "Logic analyser")
+
 This description is based on pure observation with the help of a logic
 analyser.
-
-[![Logic analyser](.media/logic-analyser-tn.png)](.media/logic-analyser.jpg?raw=true "Logic analyser")
 
 ```text
 SEND 55 55 55 55 55 55 (synchronisation)
