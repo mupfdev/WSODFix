@@ -468,8 +468,6 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* htim_base)
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-    static uint32_t ms_count = 0;
-
     if (TIM2 == htim->Instance)
     {
         if (true == all_done)
@@ -479,6 +477,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         }
         else
         {
+            static uint32_t ms_count = 0;
             ms_count += 1;
             if (ms_count >= (uint32_t)status_led)
             {
