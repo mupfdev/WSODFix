@@ -103,12 +103,12 @@ boot. This can then only be repaired by a successful run.
 - 1× 1kΩ and 1× 10kΩ resistor (optional),
 - 1× External status LED + dropping resistor (optional).
 
-### Wiring diagram
+### Schematic
 
 Note: The voltage divider is almost certainly optional.  Alternatively,
 you can also set Vpp to 3V3.
 
-[![Schematic](.media/schematic.svg)](.media/schematic.svg?raw=true "Schematic")
+[![Schematic](.media/schematic.svg)](docs/WSODFix.pdf?raw=true "Schematic")
 
 ## FBus
 
