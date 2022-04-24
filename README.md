@@ -10,9 +10,6 @@
 <a href="https://www.travis-ci.com/mupfelofen-de/WSODFix">
     <img src="https://www.travis-ci.com/mupfelofen-de/WSODFix.svg?branch=master" alt="Build status" />
 </a>
-<a href="https://www.codacy.com/gh/mupfelofen-de/WSODFix/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=mupfelofen-de/WSODFix&amp;utm_campaign=Badge_Grade">
-    <img src="https://app.codacy.com/project/badge/Grade/1bd6fb3c09f447c9a75ef2d1cf440040"/>
-</a>
 </p>
 
 ## About
